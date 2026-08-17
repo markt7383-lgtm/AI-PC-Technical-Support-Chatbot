@@ -1,0 +1,1677 @@
+{
+  "name": "AI PC Technical Support Chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "responseMode": "lastNode"
+        }
+      },
+      "id": "e75d6767-fd78-41b1-99f6-9dec73c6f255",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        640,
+        256
+      ],
+      "webhookId": "2fd908f7-ee79-4257-8ed1-55988fb0391e"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "case_id",
+              "value": "=CASE-{{ $json.sessionId }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "session_id",
+              "value": "={{ $json.sessionId }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "Message_body",
+              "value": "={{ $json.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "name",
+              "value": "Customer",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "93d82616-7709-498e-82e5-ba290639e25d",
+      "name": "Normalize Chat",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        864,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE",
+          "mode": "list",
+          "cachedResultName": "Enterprise_AI_ServiceDesk_Template",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1888346643,
+          "mode": "list",
+          "cachedResultName": "support_cases",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit#gid=1888346643"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "case_id",
+              "lookupValue": "={{ $('Normalize Chat').item.json.case_id }}"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "id": "c5aa81ec-e6f6-4561-97dd-94ca04efd148",
+      "name": "Load Case Context",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1152,
+        256
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3FyqUD1T1zd5UC6p",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================================\n// SAFETY RISK CHECK\n//\n// Purpose:\n// Check the customer's message for signs of a possible\n// hardware safety problem.\n//\n// Examples:\n// - Burning smell\n// - Smoke\n// - Sparks\n// - Electric shock\n// - Swollen battery\n// - Extreme heat\n//\n// This check happens using normal code instead of relying\n// only on the AI to recognize dangerous situations.\n// ============================================================\n\n\n// ------------------------------------------------------------\n// 1. GET THE CUSTOMER MESSAGE\n//\n// Get the message from the Normalize Chat node.\n//\n// String() makes sure we are working with text.\n//\n// toLowerCase() converts everything to lowercase so\n// words like \"SMOKE\", \"Smoke\", and \"smoke\" are treated\n// the same way.\n//\n// If there is no message, use an empty string.\n// ------------------------------------------------------------\n\nconst msg = String(\n  $('Normalize Chat').item.json.Message_body || ''\n).toLowerCase();\n\n\n// ------------------------------------------------------------\n// 2. DEFINE SAFETY PATTERNS\n//\n// These are words and text patterns that may indicate\n// a dangerous hardware problem.\n//\n// The /.../ values are Regular Expressions (Regex).\n// They allow us to match different ways a customer\n// might describe the same safety problem.\n// ------------------------------------------------------------\n\nconst patterns = [\n\n  // Burning smell\n  /burning smell/,\n  /burn(ing|t)?\\s+smell/,\n  /smell.*burn/,\n\n  // Smoke\n  /smoke|smoking/,\n\n  // Sparks\n  /spark(s|ing|ed)?/,\n\n  // Fire\n  /on fire|caught fire|catching fire|\\bfire\\b/,\n\n  // Electrical shock or electrical arcing\n  /electric(al)? shock|shocked me|got shocked|arc(ing|ed)?/,\n\n  // Swollen, leaking, or bulging battery\n  /swollen batter|bulging batter|leaking batter|battery.*(swollen|leak|bulg)/,\n\n  // Signs of heat or burn damage\n  /melt(ing|ed)?|scorch|charred|burn mark/,\n\n  // Dangerous overheating\n  /dangerous(ly)? (hot|overheat)|overheat(ing|ed)?|too hot to touch/,\n];\n\n\n// ------------------------------------------------------------\n// 3. DEFAULT TO NO SAFETY RISK\n//\n// We start with false.\n//\n// It will only become true if one of the safety patterns\n// matches the customer's message.\n// ------------------------------------------------------------\n\nlet safety_risk = false;\n\n\n// ------------------------------------------------------------\n// 4. CHECK EACH SAFETY PATTERN\n//\n// Go through the patterns one by one.\n//\n// p.test(msg) checks if the current pattern can be found\n// inside the customer's message.\n//\n// Once we find a match:\n// - safety_risk becomes true\n// - break stops the loop because we already know there\n//   is a possible safety problem.\n// ------------------------------------------------------------\n\nfor (const p of patterns) {\n\n  if (p.test(msg)) {\n    safety_risk = true;\n    break;\n  }\n\n}\n\n\n// ------------------------------------------------------------\n// 5. RETURN THE RESULT\n//\n// Example:\n//\n// Safe message:\n// { \"safety_risk\": false }\n//\n// Possible dangerous message:\n// { \"safety_risk\": true }\n//\n// The next IF node can use this value to decide whether\n// normal troubleshooting should continue or the case\n// should go through the safety/escalation path.\n// ------------------------------------------------------------\n\nreturn {\n  safety_risk\n};"
+      },
+      "id": "161dc91a-1d07-4395-a5b5-1a7c6bfbef29",
+      "name": "Safety Guard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "sg1",
+              "leftValue": "={{ $json.safety_risk }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b03b3ad6-115a-44c0-8c3a-83060c3d45eb",
+      "name": "Safety Risk?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1600,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE",
+          "mode": "list",
+          "cachedResultName": "Enterprise_AI_ServiceDesk_Template",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 476719665,
+          "mode": "list",
+          "cachedResultName": "escalation_log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit#gid=476719665"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "escalation_id": "={{ $execution.id }}",
+            "case_id": "={{ $('Normalize Chat').item.json.case_id }}",
+            "reason": "=Safety hazard reported by customer: {{ $('Normalize Chat').item.json.Message_body }}",
+            "assigned_team": "Safety / Technician",
+            "status": "escalated",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "escalation_id",
+              "displayName": "escalation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "case_id",
+              "displayName": "case_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "assigned_team",
+              "displayName": "assigned_team",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "df458f1b-7c7b-42a9-9261-c19d08506997",
+      "name": "Log Safety Escalation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2016,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3FyqUD1T1zd5UC6p",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE",
+          "mode": "list",
+          "cachedResultName": "Enterprise_AI_ServiceDesk_Template",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1888346643,
+          "mode": "list",
+          "cachedResultName": "support_cases",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit#gid=1888346643"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "case_id": "={{ $('Normalize Chat').item.json.case_id }}",
+            "customer_email": "={{ $('Normalize Chat').item.json.session_id }}",
+            "status": "escalated",
+            "priority": "High",
+            "assigned_team": "Safety / Technician",
+            "customer_message": "={{ $('Normalize Chat').item.json.Message_body }}"
+          },
+          "matchingColumns": [
+            "case_id"
+          ],
+          "schema": [
+            {
+              "id": "case_id",
+              "displayName": "case_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_email",
+              "displayName": "customer_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "assigned_team",
+              "displayName": "assigned_team",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_message",
+              "displayName": "customer_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "42a9dec7-a300-424d-a6b3-9d0fd38a6c64",
+      "name": "Update Case — Safety Hold",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2416,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3FyqUD1T1zd5UC6p",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sr1",
+              "name": "output",
+              "type": "string",
+              "value": "=For your safety, please STOP using the device immediately: unplug it from power (if safe to do so), do not turn it on, do not charge it, and do not attempt any repairs. This looks like a potential hazard that must be handled by a technician, not remote troubleshooting. I've escalated your case to our technical/safety team and a human specialist will follow up shortly. Your reference is {{ $('Normalize Chat').item.json.case_id }}."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "15686a20-8017-40a5-ba35-99d28dfec6a4",
+      "name": "Reply — Safety",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the single conversational PC hardware technical-support agent.\n\nYour responsibilities are to:\n1. Understand the customer's latest message.\n2. Use the provided case context without inventing missing history.\n3. Determine the safest and most appropriate support action.\n4. Use the approved knowledge-base tool when technical knowledge is required.\n5. Produce the final customer-facing response.\n\nCUSTOMER MESSAGE:\n{{ $('Normalize Chat').item.json.Message_body }}\n\nKNOWN CASE CONTEXT:\nEmpty fields mean the information is unknown or this may be a new conversation.\n\n- existing status: {{ $('Load Case Context').item.json.status }}\n- existing category: {{ $('Load Case Context').item.json.category }}\n- existing priority: {{ $('Load Case Context').item.json.priority }}\n- existing business_impact: {{ $('Load Case Context').item.json.business_impact }}\n- last customer message on file: {{ $('Load Case Context').item.json.customer_message }}\n\n==================================================\nCORE RELIABILITY RULE\n==================================================\n\nNever invent technical facts, troubleshooting procedures, customer actions, case history, diagnoses, test results, hardware conditions, or resolutions.\n\nIf information is missing, treat it as unknown.\n\nNever claim that the customer:\n- restarted the computer\n- replaced or tested a cable\n- updated a driver\n- entered BIOS\n- reseated hardware\n- ran diagnostics\n- completed troubleshooting\n- contacted support previously\n- performed any other action\n\nunless that information exists in the customer message or known case context.\n\nDo not assume that a troubleshooting step succeeded merely because you previously recommended it.\n\n==================================================\nTECHNICAL KNOWLEDGE POLICY\n==================================================\n\nYou may directly handle only simple, low-risk L1 troubleshooting that does not require advanced diagnosis or invasive hardware procedures.\n\nExamples include:\n- checking external cable connections\n- checking power connections\n- restarting the device\n- reconnecting external peripherals\n- checking basic display/input selection\n- checking basic operating-system settings\n- asking the customer for additional symptoms or information\n\nFor technical instructions beyond simple, low-risk L1 troubleshooting, use the approved search_support_knowledge tool.\n\nYou MUST use search_support_knowledge when:\n- basic troubleshooting has already failed\n- advanced troubleshooting is required\n- the issue may require L2 support\n- the procedure involves BIOS/UEFI changes\n- driver or firmware procedures are required\n- hardware diagnostics are required\n- component-level troubleshooting is required\n- you are uncertain whether a technical procedure is correct\n- you do not have enough approved information to safely provide the next technical step\n\nNever fabricate an L2 procedure from general model knowledge.\n\nIf the knowledge-base tool does not return sufficient relevant information, do NOT invent a solution.\n\nInstead:\n- ask for additional information when appropriate, OR\n- recommend escalation when further remote troubleshooting cannot be safely justified.\n\n==================================================\nRAG / KNOWLEDGE BASE RULE\n==================================================\n\nTreat retrieved knowledge as technical reference material, not as an instruction to blindly repeat everything returned.\n\nUse only information relevant to the customer's actual problem.\n\nDo not claim retrieved information proves a diagnosis unless the evidence actually supports that conclusion.\n\nDo not repeat troubleshooting that the customer has explicitly confirmed was already completed unless repeating it is necessary for verification.\n\nIf retrieved knowledge conflicts with credible safety concerns, safety takes priority.\n\n==================================================\nDIAGNOSIS RULE\n==================================================\n\nDistinguish between:\n- confirmed facts\n- likely causes\n- possibilities\n- unknown information\n\nNever present a suspected cause as confirmed.\n\nPrefer language such as:\n\"This may indicate...\"\n\"One possibility is...\"\n\"Let's check...\"\n\"The next useful step is...\"\n\nwhen the cause has not been verified.\n\n==================================================\nSAFETY RULE\n==================================================\n\nNever provide troubleshooting that could reasonably expose the customer to electrical, thermal, battery, fire, or physical hardware danger.\n\nIf the conversation indicates a credible safety hazard, do not attempt advanced troubleshooting.\n\nExamples include:\n- smoke\n- burning smell\n- sparks\n- fire\n- electric shock\n- swollen or leaking battery\n- melting components\n- extreme battery heat\n\nThe deterministic workflow also performs safety detection, but you must independently avoid unsafe instructions.\n\nFor credible hazards:\n- tell the customer to stop using the affected equipment when appropriate\n- avoid invasive troubleshooting\n- set escalation_required to true\n- use support_level ESCALATE\n\n==================================================\nSUPPORT DECISION RULES\n==================================================\n\nUse:\n\nL1\nfor simple, low-risk troubleshooting that can be safely handled without advanced knowledge.\n\nL2\nwhen advanced technical knowledge is required and the approved knowledge-base tool provides sufficient relevant information.\n\nMORE_INFO\nwhen there is not enough information to determine a safe and useful next step.\n\nESCALATE\nwhen:\n- there is a credible safety concern\n- physical inspection or repair is required\n- approved knowledge is insufficient for safe remote troubleshooting\n- repeated troubleshooting has failed\n- human support intervention is appropriate\n- a genuine support-experience complaint requires human handling\n\nRESOLVED\nonly when the customer's message clearly confirms that the issue has been resolved.\n\nNever mark a case RESOLVED merely because you provided troubleshooting instructions.\n\n==================================================\nCOMPLAINT RULE\n==================================================\n\nTechnical frustration alone is not necessarily a support complaint.\n\nExample:\n\"This stupid laptop still doesn't work.\"\n→ technical frustration, not automatically a support complaint.\n\nA complaint about the support experience may require escalation.\n\nExample:\n\"I've contacted support three times and nobody has helped me.\"\n→ support-experience complaint.\n\nDo not escalate merely because the customer sounds angry.\n\n==================================================\nPRIORITY AND BUSINESS IMPACT\n==================================================\n\nBase priority and business impact only on evidence provided by the customer or existing case context.\n\nDo not exaggerate impact.\n\nFor example, do not assume:\n- business operations are stopped\n- multiple employees are affected\n- critical data is inaccessible\n- revenue is being lost\n\nunless the conversation provides evidence for it.\n\n==================================================\nRESPONSE BEHAVIOR\n==================================================\n\nKeep the customer-facing reply:\n- natural\n- concise\n- helpful\n- conversational\n- appropriate for chat\n\nPrefer ONE useful troubleshooting action or a small logical group of related actions at a time.\n\nDo not overwhelm the customer with a large checklist when interactive troubleshooting would be more appropriate.\n\nWhen you need the result of a troubleshooting step, ask the customer to perform it and report what happened.\n\nDo not continue reasoning as though the step succeeded before receiving their answer.\n\nNever mention:\n- AI\n- agents\n- prompts\n- tools\n- RAG\n- Pinecone\n- L1/L2 terminology\n- workflow nodes\n- structured output\n- internal routing\n\n==================================================\nFINAL SELF-CHECK\n==================================================\n\nBefore returning your decision, silently verify:\n\n1. Did I invent any customer history?\n2. Did I invent a technical fact or diagnosis?\n3. Did I claim an unperformed troubleshooting step was completed?\n4. Am I giving advanced technical instructions without approved knowledge?\n5. Should I ask for more information instead?\n6. Is there any safety reason this should be escalated?\n7. Does my support_level match what actually happened?\n8. Am I marking something resolved without customer confirmation?\n9. Is my priority/business impact supported by evidence?\n10. Is my reply concise and appropriate for an interactive chat?\n\nIf uncertain about a technical procedure, prefer MORE_INFO, search_support_knowledge, or ESCALATE rather than guessing.\n\n==================================================\nOUTPUT\n==================================================\n\nReturn ONLY the required structured decision.\n\nThe \"reply\" field must contain the complete, natural, customer-ready chat message.\n\nDo not include explanations outside the structured output.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "ROLE: You are \"PC Support Assistant\", one conversational agent that replaces the old separate classification, complaint, L1 and L2 agents. You classify, reason, decide, and write the reply in a single pass.\n\nALLOWED VALUES (use these EXACTLY):\n- category: CPU | Motherboard | RAM | Graphics Card | Power Supply | Storage | Cooling | BIOS / UEFI | Boot Issues | Display | Peripheral Devices | Operating System | Performance | General Hardware Inquiry\n- priority: Low | Medium | High\n- business_impact: Low | Medium | High\n- support_level: L1 | L2 | ESCALATE | RESOLVED | MORE_INFO\nBase priority/business_impact only on what the customer explicitly states. Do not assume work/gaming/business use or urgency.\n\nL1 vs L2:\n- L1: handle simple, safe, customer-performable troubleshooting DIRECTLY yourself (restart, check cables/power, reseat/reconnect peripherals, try another USB port, display/audio/network settings, basic OS settings, Windows Update / basic driver checks, Bluetooth pairing). Do NOT call any tool for L1.\n- L2: advanced troubleshooting. You MUST call the search_support_knowledge tool FIRST and base advanced steps ONLY on what it returns. Never invent L2 procedures. Call the tool ONLY when L1 reasoning is insufficient, advanced knowledge is needed, or basic troubleshooting already failed. Do NOT route every message through the tool.\nSet tool_needed = \"search_support_knowledge\" and a focused tool_query when you use it; otherwise leave both empty.\n\nSUPPORT LEVEL MEANING: RESOLVED (issue solved / no further action), MORE_INFO (you need one clarifying detail), L1 (you gave safe basic steps), L2 (you gave KB-supported advanced steps), ESCALATE (needs a human/technician/repair).\n\nSAFETY: A deterministic guard already blocks credible physical hazards before you run. If a hazard still surfaces, set safety_risk = true, support_level = ESCALATE, escalation_required = true, and do NOT tell the customer to power on, open, charge, or keep using the device.\n\nCOMPLAINTS: Set complaint_detected = true for genuine SUPPORT-EXPERIENCE or BILLING complaints, or explicit requests for a human/manager. A TECHNICAL complaint (\"my laptop is terrible\", \"this keeps crashing\") is NOT by itself grounds for escalation. Set escalation_required = true ONLY for support-experience/billing complaints, explicit human/manager requests, or genuine technician/repair needs. Set assigned_team accordingly (e.g. \"customer service\" for experience complaints, \"Technician\" for repair, \"AI\" otherwise).\n\nCASE WRITES: Set case_update_needed = true only when something material changed — a new case, a status change, a category/priority change, a materially changed summary, or an assignment/escalation change. Otherwise false.\n\nOUTPUT: Return the structured object. \"reply\" is the final chat message the customer will read.",
+          "maxIterations": 6
+        }
+      },
+      "id": "20c2e6a6-b1c7-443f-9200-2fad1813339d",
+      "name": "Main Support Orchestrator",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1952,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "ef425633-b259-47b0-a813-40cca5384ad8",
+      "name": "Orchestrator Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1824,
+        736
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "HMwXhiOA26m83deG",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Normalize Chat').item.json.session_id }}",
+        "contextWindowLength": 10
+      },
+      "id": "9d97e637-89c7-4dd8-a469-b4ddb058f305",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        1952,
+        704
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "description": "The ONLY approved source for advanced Level 2 PC troubleshooting procedures. Call this ONLY when simple L1 reasoning is insufficient, advanced knowledge is required, or basic troubleshooting already failed. Input should be a fully-formed technical question including the symptom, category, and what troubleshooting was already completed. Do NOT invent L2 procedures that are not returned here.",
+        "topK": "={{ 5 }}"
+      },
+      "id": "35ef32cd-4a7a-43ed-bfb4-863a651e0bbe",
+      "name": "search_support_knowledge",
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1.1,
+      "position": [
+        2032,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "70258c8c-236b-40ed-b042-1376b3f29424",
+      "name": "Vector Tool Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2448,
+        1024
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "HMwXhiOA26m83deG",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "pc-troubleshooter",
+          "mode": "list",
+          "cachedResultName": "pc-troubleshooter"
+        },
+        "options": {}
+      },
+      "id": "d6253461-e04a-4b53-aa46-d2d6c1df7039",
+      "name": "Pinecone Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        2080,
+        1168
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "Bn7X3nwtDZ7kli1S",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "22ccf276-852d-4857-af12-e79dff1e7632",
+      "name": "Embeddings OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1984,
+        1344
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "HMwXhiOA26m83deG",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"category\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\",\"enum\":[\"Low\",\"Medium\",\"High\"]},\"business_impact\":{\"type\":\"string\",\"enum\":[\"Low\",\"Medium\",\"High\"]},\"complaint_detected\":{\"type\":\"boolean\"},\"safety_risk\":{\"type\":\"boolean\"},\"support_level\":{\"type\":\"string\",\"enum\":[\"L1\",\"L2\",\"ESCALATE\",\"RESOLVED\",\"MORE_INFO\"]},\"tool_needed\":{\"type\":\"string\"},\"tool_query\":{\"type\":\"string\"},\"case_update_needed\":{\"type\":\"boolean\"},\"escalation_required\":{\"type\":\"boolean\"},\"assigned_team\":{\"type\":\"string\"},\"reply\":{\"type\":\"string\"}},\"required\":[\"category\",\"priority\",\"business_impact\",\"complaint_detected\",\"safety_risk\",\"support_level\",\"tool_needed\",\"tool_query\",\"case_update_needed\",\"escalation_required\",\"assigned_team\",\"reply\"],\"additionalProperties\":false}"
+      },
+      "id": "410ae1ef-d461-470f-96e0-a676c62445c9",
+      "name": "Decision Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2320,
+        656
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================================\n// DECISION VALIDATION\n//\n// Purpose:\n// Check the AI output before the workflow uses it.\n//\n// We do not want to trust every AI value automatically.\n// If the AI gives an unexpected value, we use a safe default.\n// ============================================================\n\n\n// ------------------------------------------------------------\n// 1. GET THE AI OUTPUT\n//\n// The AI result should normally be inside $json.output.\n//\n// If there is no proper output, use an empty object {}\n// so the code does not immediately break.\n// ------------------------------------------------------------\n\nconst output =\n  $json.output && typeof $json.output === \"object\"\n    ? $json.output\n    : {};\n\n\n// ------------------------------------------------------------\n// 2. VALUES THAT WE ALLOW\n//\n// The AI should only use values from these lists.\n//\n// Example:\n// \"High\" = allowed\n// \"SUPER HIGH\" = not allowed\n// ------------------------------------------------------------\n\nconst ALLOWED_PRIORITY = [\n  \"Low\",\n  \"Medium\",\n  \"High\"\n];\n\nconst ALLOWED_BUSINESS_IMPACT = [\n  \"Low\",\n  \"Medium\",\n  \"High\"\n];\n\nconst ALLOWED_SUPPORT_LEVEL = [\n  \"L1\",\n  \"L2\",\n  \"ESCALATE\",\n  \"RESOLVED\",\n  \"MORE_INFO\"\n];\n\nconst ALLOWED_CATEGORY = [\n  \"CPU\",\n  \"Motherboard\",\n  \"RAM\",\n  \"Graphics Card\",\n  \"Power Supply\",\n  \"Storage\",\n  \"Cooling\",\n  \"BIOS / UEFI\",\n  \"Boot Issues\",\n  \"Display\",\n  \"Peripheral Devices\",\n  \"Operating System\",\n  \"Performance\",\n  \"General Hardware Inquiry\"\n];\n\n\n// ------------------------------------------------------------\n// 3. SIMPLE VALIDATION FUNCTION\n//\n// This checks if a value is allowed.\n//\n// If yes:\n// return the original value.\n//\n// If no:\n// return the safe default value.\n// ------------------------------------------------------------\n\nfunction validateValue(value, allowedValues, fallback) {\n\n  if (allowedValues.includes(value)) {\n    return value;\n  }\n\n  return fallback;\n}\n\n\n// ------------------------------------------------------------\n// 4. CHECK PRIORITY\n//\n// If the AI gives Low, Medium, or High,\n// we keep it.\n//\n// Otherwise, use Medium.\n// ------------------------------------------------------------\n\nconst priority = validateValue(\n  output.priority,\n  ALLOWED_PRIORITY,\n  \"Medium\"\n);\n\n\n// ------------------------------------------------------------\n// 5. CHECK BUSINESS IMPACT\n//\n// If the AI gives an unexpected value,\n// use Low as the default.\n// ------------------------------------------------------------\n\nconst businessImpact = validateValue(\n  output.business_impact,\n  ALLOWED_BUSINESS_IMPACT,\n  \"Low\"\n);\n\n\n// ------------------------------------------------------------\n// 6. CHECK SUPPORT LEVEL\n//\n// This is important because the workflow can use this\n// to decide what should happen next.\n//\n// If the AI gives an invalid value,\n// use MORE_INFO instead.\n// ------------------------------------------------------------\n\nconst supportLevel = validateValue(\n  output.support_level,\n  ALLOWED_SUPPORT_LEVEL,\n  \"MORE_INFO\"\n);\n\n\n// ------------------------------------------------------------\n// 7. CHECK CATEGORY\n//\n// If the AI gives a category that we do not recognize,\n// use General Hardware Inquiry.\n// ------------------------------------------------------------\n\nconst category = validateValue(\n  output.category,\n  ALLOWED_CATEGORY,\n  \"General Hardware Inquiry\"\n);\n\n\n// ------------------------------------------------------------\n// 8. GET THE CUSTOMER REPLY\n//\n// Make sure the reply is actually text.\n//\n// trim() simply removes extra spaces from the\n// beginning and end.\n//\n// If there is no proper reply, use an empty string.\n// ------------------------------------------------------------\n\nconst reply =\n  typeof output.reply === \"string\"\n    ? output.reply.trim()\n    : \"\";\n\n\n// ------------------------------------------------------------\n// 9. KEEP TRACK OF INVALID VALUES\n//\n// This makes debugging easier.\n//\n// Example:\n//\n// [\"priority\", \"reply\"]\n//\n// means there was a problem with those two fields.\n// ------------------------------------------------------------\n\nconst validationErrors = [];\n\nif (!ALLOWED_PRIORITY.includes(output.priority)) {\n  validationErrors.push(\"priority\");\n}\n\nif (!ALLOWED_BUSINESS_IMPACT.includes(output.business_impact)) {\n  validationErrors.push(\"business_impact\");\n}\n\nif (!ALLOWED_SUPPORT_LEVEL.includes(output.support_level)) {\n  validationErrors.push(\"support_level\");\n}\n\nif (!ALLOWED_CATEGORY.includes(output.category)) {\n  validationErrors.push(\"category\");\n}\n\nif (!reply) {\n  validationErrors.push(\"reply\");\n}\n\n\n// ------------------------------------------------------------\n// 10. DECIDE IF THE AI OUTPUT CAN BE USED\n//\n// The two most important things here are:\n//\n// 1. We need a customer reply.\n// 2. We need a valid support level.\n//\n// If either one is missing or invalid,\n// valid becomes false.\n// ------------------------------------------------------------\n\nconst valid =\n  reply !== \"\" &&\n  ALLOWED_SUPPORT_LEVEL.includes(output.support_level);\n\n\n// ------------------------------------------------------------\n// 11. RETURN CLEAN DATA\n//\n// From this point forward, the next workflow nodes\n// should use these checked values instead of using\n// the raw AI output directly.\n// ------------------------------------------------------------\n\nreturn {\n  valid,\n\n  validation_errors: validationErrors,\n\n  category,\n  priority,\n  business_impact: businessImpact,\n  support_level: supportLevel,\n\n  complaint_detected:\n    output.complaint_detected === true,\n\n  safety_risk:\n    output.safety_risk === true,\n\n  tool_needed:\n    output.tool_needed || \"\",\n\n  tool_query:\n    output.tool_query || \"\",\n\n  case_update_needed:\n    output.case_update_needed === true,\n\n  escalation_required:\n    output.escalation_required === true,\n\n  assigned_team:\n    output.assigned_team || \"AI\",\n\n  reply\n};"
+      },
+      "id": "89024970-41cf-47e8-8487-2b73f091d603",
+      "name": "Validate Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dv1",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ce4f82f2-b277-49ab-9e9e-6bd98b0914e1",
+      "name": "Decision Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2640,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ea1",
+              "leftValue": "={{ $json.escalation_required }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "56c89d9e-20b9-43c5-8b00-55527d5849c5",
+      "name": "Escalation Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2864,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE",
+          "mode": "list",
+          "cachedResultName": "Enterprise_AI_ServiceDesk_Template",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 476719665,
+          "mode": "list",
+          "cachedResultName": "escalation_log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit#gid=476719665"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "escalation_id": "={{ $execution.id }}",
+            "case_id": "={{ $('Normalize Chat').item.json.case_id }}",
+            "reason": "={{ $('Validate Decision').item.json.support_level }} — {{ $('Validate Decision').item.json.reply }}",
+            "assigned_team": "={{ $('Validate Decision').item.json.assigned_team }}",
+            "status": "escalated",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "escalation_id",
+              "displayName": "escalation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "case_id",
+              "displayName": "case_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "assigned_team",
+              "displayName": "assigned_team",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "32ea3fd1-ec60-4ff3-9d06-5608bc949d5a",
+      "name": "Create Escalation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3088,
+        240
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3FyqUD1T1zd5UC6p",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE",
+          "mode": "list",
+          "cachedResultName": "Enterprise_AI_ServiceDesk_Template",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1888346643,
+          "mode": "list",
+          "cachedResultName": "support_cases",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit#gid=1888346643"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "case_id": "={{ $('Normalize Chat').item.json.case_id }}",
+            "customer_email": "={{ $('Normalize Chat').item.json.session_id }}",
+            "status": "escalated",
+            "priority": "={{ $('Validate Decision').item.json.priority }}",
+            "category": "={{ $('Validate Decision').item.json.category }}",
+            "business_impact": "={{ $('Validate Decision').item.json.business_impact }}",
+            "assigned_team": "={{ $('Validate Decision').item.json.assigned_team }}",
+            "customer_message": "={{ $('Normalize Chat').item.json.Message_body }}"
+          },
+          "matchingColumns": [
+            "case_id"
+          ],
+          "schema": [
+            {
+              "id": "case_id",
+              "displayName": "case_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_email",
+              "displayName": "customer_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_impact",
+              "displayName": "business_impact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "assigned_team",
+              "displayName": "assigned_team",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_message",
+              "displayName": "customer_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "784e3454-8b31-4e73-bb22-1bfb4ebe48a0",
+      "name": "Update Case — Escalated",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3312,
+        240
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3FyqUD1T1zd5UC6p",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "<__PLACEHOLDER_VALUE__Business owner's Telegram chat ID__>",
+        "text": "=🚨 New support escalation / complaint\n\nCase: {{ $('Normalize Chat').item.json.case_id }}\nSession: {{ $('Normalize Chat').item.json.session_id }}\nCategory: {{ $('Validate Decision').item.json.category }}\nPriority: {{ $('Validate Decision').item.json.priority }}\nLevel: {{ $('Validate Decision').item.json.support_level }}\nComplaint: {{ $('Validate Decision').item.json.complaint_detected }}\nAssign to: {{ $('Validate Decision').item.json.assigned_team }}\n\nCustomer message:\n{{ $('Normalize Chat').item.json.Message_body }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "c6f6a5bd-4882-44ce-98db-41d430b4847a",
+      "name": "Notify Owner (Telegram)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3536,
+        240
+      ],
+      "webhookId": "a3b5ba3a-351b-47de-be49-7731e1af21bc",
+      "credentials": {
+        "telegramApi": {
+          "id": "SdCLjAuT9bkINQKf",
+          "name": "Telegram account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0TnOmvczeoIWrIhx"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "case_id": "={{ $('Normalize Chat').item.json.case_id }}",
+            "session_id": "={{ $('Normalize Chat').item.json.session_id }}",
+            "sender_name": "={{ $('Normalize Chat').item.json.name }}",
+            "sender_type": "=AI ({{ $('Validate Decision').item.json.support_level }})",
+            "message": "={{ $('Normalize Chat').item.json.Message_body }}",
+            "reply": "={{ $('Validate Decision').item.json.reply }}",
+            "category": "={{ $('Validate Decision').item.json.category }}",
+            "priority": "={{ $('Validate Decision').item.json.priority }}",
+            "support_level": "={{ $('Validate Decision').item.json.support_level }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "case_id",
+              "displayName": "case_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "sender_name",
+              "displayName": "sender_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "sender_type",
+              "displayName": "sender_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "reply",
+              "displayName": "reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "support_level",
+              "displayName": "support_level",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "aa1ccfa1-0f96-4fa9-a6c4-2577cb0fbb3c",
+      "name": "Fire Async Logger",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3904,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cu1",
+              "leftValue": "={{ $json.case_update_needed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ab6a6985-cfaa-4fdf-9e98-14eda03214e9",
+      "name": "Case Update Needed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3088,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE",
+          "mode": "list",
+          "cachedResultName": "Enterprise_AI_ServiceDesk_Template",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1888346643,
+          "mode": "list",
+          "cachedResultName": "support_cases",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mP2-rxG2EktrdD3xo-CN9KEQ6NqGjeikm6ET6QjeSIE/edit#gid=1888346643"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "case_id": "={{ $('Normalize Chat').item.json.case_id }}",
+            "customer_email": "={{ $('Normalize Chat').item.json.session_id }}",
+            "customer_name": "={{ $('Normalize Chat').item.json.name }}",
+            "status": "={{ $('Validate Decision').item.json.support_level === 'RESOLVED' ? 'resolved' : 'open' }}",
+            "priority": "={{ $('Validate Decision').item.json.priority }}",
+            "category": "={{ $('Validate Decision').item.json.category }}",
+            "business_impact": "={{ $('Validate Decision').item.json.business_impact }}",
+            "customer_message": "={{ $('Normalize Chat').item.json.Message_body }}",
+            "assigned_team": "={{ $('Validate Decision').item.json.assigned_team }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "case_id"
+          ],
+          "schema": [
+            {
+              "id": "case_id",
+              "displayName": "case_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_email",
+              "displayName": "customer_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_name",
+              "displayName": "customer_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_impact",
+              "displayName": "business_impact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_message",
+              "displayName": "customer_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "assigned_team",
+              "displayName": "assigned_team",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "44f74b53-4364-49b3-9168-666adcb30754",
+      "name": "Create or Update Case",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3680,
+        512
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3FyqUD1T1zd5UC6p",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fb1",
+              "name": "output",
+              "type": "string",
+              "value": "I'm sorry, I couldn't process that reliably just now. Could you briefly restate the problem — including your operating system and any error message? If it's urgent, I can connect you with a human support technician."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bda7f8dc-35fa-4d73-9a22-62529f211c88",
+      "name": "Reply — Safe Fallback",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2864,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ri1",
+              "name": "output",
+              "type": "string",
+              "value": "={{ $('Validate Decision').item.json.reply }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "490e3b4f-5ed0-4a1e-90ed-5f1fd58318cf",
+      "name": "Reply — Immediate",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4128,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1. Input / Normalization\nChat Trigger + Normalize Chat: extract case_id, session_id, message, name from the chat turn.",
+        "height": 240,
+        "width": 300,
+        "color": 4
+      },
+      "id": "a5718998-9e2b-4169-b3d4-241e95208c44",
+      "name": "S1 Input",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2. Context Loading (get_case_context)\nDeterministic Google Sheets read of support_cases — NO LLM. Loads only compact existing case state for this turn.",
+        "height": 240,
+        "width": 300,
+        "color": 5
+      },
+      "id": "241205cb-2091-4e41-a949-756756e20de7",
+      "name": "S2 Context",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3. Deterministic Safety Guard\nRegex hazard scan (smoke, fire, sparks, swollen battery...). If a hazard is found the workflow enforces a safe escalation route and never runs normal troubleshooting.",
+        "height": 260,
+        "width": 320,
+        "color": 2
+      },
+      "id": "0de26d7f-ea0f-42fb-bc50-7c0841fa812d",
+      "name": "S3 Safety",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4. Main Support Orchestrator\nONE conversational agent. Classifies, detects complaints, reasons L1/L2, decides actions, and writes the final reply. Replaces the old Classification, Complaint, L1, L1 Writer, L2 Writer nodes.",
+        "height": 300,
+        "width": 340,
+        "color": 3
+      },
+      "id": "8b8cc41f-ae98-4958-ad2c-4c13dd0ac3e1",
+      "name": "S4 Orchestrator",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 5. RAG Tool (search_support_knowledge)\nExisting Pinecone knowledge base, exposed as a tool. The ONLY approved source for advanced L2 procedures. Called on-demand by the agent — not on every message.",
+        "height": 260,
+        "width": 320,
+        "color": 6
+      },
+      "id": "a83e2202-7fc7-4ddf-8647-d3e2a4fb8ce6",
+      "name": "S5 RAG",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 6. Decision Validation\nDeterministic Code node validates enums and the reply. Invalid output routes to a safe fallback instead of continuing blindly.",
+        "height": 240,
+        "width": 300,
+        "color": 7
+      },
+      "id": "ff6447a9-4dbc-4a0e-8e05-eb458cd7c1b2",
+      "name": "S6 Validate",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2048,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 7. Case Tools + Escalation (deterministic)\nThe agent REQUESTS actions; n8n approves and executes them: create_or_update_case (support_cases), create_escalation (escalation_log), and a Telegram alert to the business owner on every complaint/escalation. Writes happen only when needed.",
+        "height": 320,
+        "width": 360,
+        "color": 5
+      },
+      "id": "46aef5b4-9e16-444a-87aa-b3bd3ddfba0d",
+      "name": "S7 Case Tools",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 8. Immediate Response Path\nReply nodes emit { output } straight to the chat widget. The customer never waits for logging or analytics.",
+        "height": 260,
+        "width": 300,
+        "color": 4
+      },
+      "id": "1b3ef464-f989-4cb8-9c38-9e5febdd9a7f",
+      "name": "S8 Reply",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2752,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 9. Async Logging / Side Effects\nFire Async Logger calls the PC Support — Async Logger sub-workflow with waitForSubWorkflow=false, so conversation_history persistence happens off the reply path.",
+        "height": 240,
+        "width": 320,
+        "color": 6
+      },
+      "id": "581356c5-9187-49b0-9134-e7db33a89f31",
+      "name": "S9 Async",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2752,
+        224
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Chat": {
+      "main": [
+        [
+          {
+            "node": "Load Case Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Case Context": {
+      "main": [
+        [
+          {
+            "node": "Safety Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safety Guard": {
+      "main": [
+        [
+          {
+            "node": "Safety Risk?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safety Risk?": {
+      "main": [
+        [
+          {
+            "node": "Log Safety Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Main Support Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Safety Escalation": {
+      "main": [
+        [
+          {
+            "node": "Update Case — Safety Hold",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Case — Safety Hold": {
+      "main": [
+        [
+          {
+            "node": "Reply — Safety",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Main Support Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Validate Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orchestrator Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Main Support Orchestrator",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Main Support Orchestrator",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_support_knowledge": {
+      "ai_tool": [
+        [
+          {
+            "node": "Main Support Orchestrator",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector Tool Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "search_support_knowledge",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "search_support_knowledge",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Main Support Orchestrator",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Decision": {
+      "main": [
+        [
+          {
+            "node": "Decision Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Valid?": {
+      "main": [
+        [
+          {
+            "node": "Escalation Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply — Safe Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalation Approved?": {
+      "main": [
+        [
+          {
+            "node": "Create Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Case Update Needed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Escalation": {
+      "main": [
+        [
+          {
+            "node": "Update Case — Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Case — Escalated": {
+      "main": [
+        [
+          {
+            "node": "Notify Owner (Telegram)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Owner (Telegram)": {
+      "main": [
+        [
+          {
+            "node": "Fire Async Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fire Async Logger": {
+      "main": [
+        [
+          {
+            "node": "Reply — Immediate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Case Update Needed?": {
+      "main": [
+        [
+          {
+            "node": "Create or Update Case",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fire Async Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Update Case": {
+      "main": [
+        [
+          {
+            "node": "Fire Async Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d0db9c02-6e03-45d0-ab73-aeedb33454ec",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6c31899a36a0cc328b6db671bec30ec5e58c49ddc013c07e94c2835f536eac4f"
+  },
+  "nodeGroups": [],
+  "id": "x7kz9Ue4Miqdge9N",
+  "tags": []
+}
